@@ -11,6 +11,13 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
+# Disable ChromaDB's anonymous telemetry globally — keeps everything local
+# and silences harmless "Failed to send telemetry event" warnings caused by
+# posthog version mismatches. Must be set BEFORE chromadb is imported, and
+# config.py is imported first everywhere, so this is the right place.
+os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
+os.environ.setdefault("CHROMA_TELEMETRY_DISABLED", "1")
+
 # Load .env from the project root (silently does nothing if missing)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(PROJECT_ROOT / ".env")

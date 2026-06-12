@@ -13,7 +13,7 @@ Run:    streamlit run app.py
 
 import streamlit as st
 
-from core import config, memory, router
+from core import config, memory, router, ui
 from core.llm import LLMClient, LLMUnavailableError, get_status
 from core.scenarios import SCENARIOS
 from agents.reviewer import Reviewer
@@ -26,8 +26,8 @@ from rag import retrieve as rag
 
 st.set_page_config(page_title=config.APP_NAME, page_icon=config.APP_ICON,
                    layout="wide")
-st.title(f"{config.APP_ICON} {config.APP_NAME}")
-st.caption(config.APP_TAGLINE)
+ui.inject_css()
+ui.hero()
 
 # ---------------------------------------------------------------- Cache
 # TEACHING NOTE: Streamlit re-runs this whole script on EVERY interaction.
@@ -58,9 +58,7 @@ with st.sidebar:
     st.header("⚙️ Control Center")
 
     # Real health status — never a hardcoded green light
-    box = {"groq": st.success, "ollama": st.warning}.get(status.provider,
-                                                         st.error)
-    box(f"{status.emoji} {status.detail}")
+    ui.status_badge(status)
 
     if status.provider == "none":
         with st.expander("🔑 How to connect an LLM", expanded=True):
@@ -89,11 +87,6 @@ with st.sidebar:
             (st.success if result["ok"] else st.error)(result["message"])
             st.rerun()
 
-    st.markdown("### 🧠 Agent Pipeline")
-    st.markdown(
-        "🧭 Router → 📚 RAG → ⚙️ Tool →\n\n"
-        "🔍 Reviewer → ⚡ Optimizer → ✅ Synthesizer")
-
     st.session_state.context_window = st.slider(
         "🧠 Memory window (messages)", 2, 12,
         st.session_state.context_window)
@@ -114,15 +107,13 @@ with st.sidebar:
 # ---------------------------------------------------------------- Welcome
 
 if not st.session_state.messages:
-    st.markdown("#### 👋 Welcome! Click a scenario to watch the agents work:")
+    st.markdown("#### Click a scenario to watch the agents work")
     cols = st.columns(3)
     for i, sc in enumerate(SCENARIOS):
         with cols[i % 3]:
-            if st.button(sc["label"], key=f"main_sc_{i}",
-                         use_container_width=True):
+            if ui.scenario_card(sc, key=f"main_sc_{i}"):
                 st.session_state.pending_prompt = sc["prompt"]
                 st.rerun()
-            st.caption(f"→ {sc['path']}")
     if status.provider == "none":
         st.info("💡 No LLM connected — the app still works in **Tools-Only "
                 "Mode**: code execution, YAML validation, Java checks and "
