@@ -92,18 +92,27 @@ with st.sidebar:
             get_llm.clear()
             st.rerun()
 
-    # Knowledge base status / build button
+    # Knowledge base — self-healing: builds itself when missing.
+    # (On Streamlit Cloud the disk is ephemeral, so after a restart the
+    # index is gone; the app simply rebuilds on first load. No buttons.)
     st.markdown("### 📚 Knowledge Base")
     if rag.index_ready():
         st.caption("✅ Index ready")
-    else:
-        st.caption("⚠️ Not built yet")
-        if st.button("📚 Build Knowledge Base"):
+    elif not st.session_state.get("kb_build_failed"):
+        with st.spinner("First-time setup: building knowledge index…"):
             from rag.ingest import build_index
-            with st.spinner("Indexing knowledge files…"):
-                result = build_index(progress=lambda m: None)
-            (st.success if result["ok"] else st.error)(result["message"])
+            result = build_index(progress=lambda m: None)
+        if result["ok"]:
+            rag.reset_cache()      # drop stale Chroma handles (see retrieve.py)
             st.rerun()
+        else:
+            st.session_state.kb_build_failed = True
+            st.error(result["message"])
+            st.caption("Fix the issue and refresh, or run "
+                       "`python -m rag.ingest` manually.")
+    else:
+        st.caption("⚠️ Knowledge index unavailable — app continues "
+                   "without RAG. Refresh to retry.")
 
     st.session_state.context_window = st.slider(
         "🧠 Memory window (messages)", 2, 12,

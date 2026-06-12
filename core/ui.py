@@ -23,10 +23,20 @@ _CSS = """
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
 /* ---------- base ---------- */
-html, body, [data-testid="stAppViewContainer"] * {
+/* Inheritance only — NEVER a `*` selector here: that would override the
+   'Material Symbols' font Streamlit's icons use, making raw icon names
+   like 'keyboard_double_arrow_right' print as text over our titles. */
+html, body, [data-testid="stAppViewContainer"],
+[data-testid="stSidebar"] {
     font-family: 'Inter', sans-serif;
 }
 code, pre, .cf-mono { font-family: 'IBM Plex Mono', monospace !important; }
+/* Belt-and-braces: keep Streamlit's icon glyphs on their icon font */
+[data-testid="stIconMaterial"],
+[data-testid="stExpanderToggleIcon"],
+.material-symbols-rounded, .material-symbols-outlined {
+    font-family: 'Material Symbols Rounded' !important;
+}
 
 .block-container { padding-top: 2.2rem; max-width: 1080px; }
 

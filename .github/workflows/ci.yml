@@ -1,0 +1,18 @@
+# Runs the deterministic test suite on every push/PR.
+# No API key, no internet downloads — by design the tests cover only
+# the deterministic layers (tools, router fallback, chunking).
+name: tests
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install pyyaml python-dotenv
+      - run: python tests/test_all.py

@@ -9,7 +9,7 @@ Builds the vector index:   knowledge/*.md  ->  ChromaDB
       re-ingesting never duplicates or errors (the old v3 bug)
 
 Run from the project root:        python -m rag.ingest
-Or click "📚 Build Knowledge Base" in the app sidebar.
+Or simply launch the app — it auto-builds a missing index.
 """
 
 from core import config

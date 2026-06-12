@@ -1,0 +1,11 @@
+# CodeForge Agents — theme ("forged steel + ember")
+[theme]
+base = "dark"
+primaryColor = "#FF6B35"            # ember orange — the one accent
+backgroundColor = "#14161B"         # gunmetal
+secondaryBackgroundColor = "#1C2027" # steel panel (sidebar, inputs)
+textColor = "#E8E6E3"
+font = "sans serif"
+
+[server]
+headless = false

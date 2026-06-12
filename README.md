@@ -156,7 +156,7 @@ python tests/test_all.py        # or: python -m pytest tests/ -v
 | 🔴 "No LLM available" | add `GROQ_API_KEY` to `.env`, or start Ollama — app still works in Tools-Only Mode meanwhile |
 | 401 invalid key | re-copy the key from console.groq.com/keys into `.env` |
 | 429 rate limit | each student should create their **own** free key rather than sharing |
-| "Knowledge base is empty" | run `python -m rag.ingest` or click 📚 Build Knowledge Base |
+| "Knowledge base is empty" | run `python -m rag.ingest` or just reload the app (it auto-builds) |
 | Model not found (404) | model deprecated — update `AGENT_MODEL` in `.env` (see console.groq.com/docs/models) |
 | `javac` skipped | install a JDK for Level-2 Java checking (static checks still run) |
 

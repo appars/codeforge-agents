@@ -5,7 +5,7 @@ exact prompt to paste, what the class will see, and the one-line lesson
 to land while it's on screen. Total runtime ≈ 30–40 minutes.
 
 > Pre-flight: `.env` has your Groq key · `python -m rag.ingest` done ·
-> sidebar shows 🟢 and "Index ready" · zoom the browser to ~125%.
+> sidebar shows 🟢 and "✅ Index ready" · zoom the browser to ~125%.
 
 ---
 

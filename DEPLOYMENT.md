@@ -11,7 +11,7 @@ or cares which platform it's on.
 | Laptop | `.env` file | `python -m rag.ingest` once |
 | Docker | `-e` / `--env-file` at runtime | **baked into the image at build** |
 | Kubernetes | `Secret` + `envFrom` | already in the image |
-| Streamlit Cloud | Secrets panel (`st.secrets`) | sidebar 📚 button after deploy |
+| Streamlit Cloud | Secrets panel (`st.secrets`) | auto-built on first load |
 
 ---
 
@@ -86,8 +86,8 @@ kubectl rollout restart deployment codeforge-agents
    ```
    `core/config.py` finds it automatically via `st.secrets` (env vars are
    checked first, so the same code runs on every platform unchanged).
-4. After first boot, click **📚 Build Knowledge Base** in the sidebar
-   (~1 minute: downloads the embedding model and indexes 43 chunks).
+4. After first boot the app **auto-builds the knowledge index** (~1 minute:
+   downloads the embedding model and indexes 43 chunks — watch the sidebar).
 
 Cloud quirks to know: the filesystem is **ephemeral** — after the app
 sleeps or redeploys, the index is gone; just click 📚 again. Ollama

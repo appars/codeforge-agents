@@ -40,6 +40,14 @@ def _get_collection():
     return _collection
 
 
+def reset_cache():
+    """Forget cached Chroma handles. MUST be called after a rebuild:
+    ingest deletes + recreates the collection, so any cached handle
+    points at a dead collection and count() reports stale results."""
+    global _model, _collection
+    _collection = None
+
+
 def index_ready() -> bool:
     """True if the knowledge base has been built."""
     try:
@@ -61,8 +69,8 @@ def retrieve(query: str, language: str = "general") -> dict:
     try:
         collection = _get_collection()
         if collection.count() == 0:
-            return {**empty, "note": "Knowledge base is empty — click "
-                    "'📚 Build Knowledge Base' in the sidebar."}
+            return {**empty, "note": "Knowledge base is empty — it will be "
+                    "auto-built on the next app load."}
         embedding = _get_model().encode(query).tolist()
     except Exception as e:
         return {**empty, "note": f"Retrieval unavailable: {e}"}
