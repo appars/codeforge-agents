@@ -48,7 +48,12 @@ def build_index(progress=print) -> dict:
                            f"({config.EMBEDDING_MODEL}). First run needs "
                            f"internet to download it once. Error: {e}"}
 
-    client = chromadb.PersistentClient(path=config.CHROMA_DIR)
+    # anonymized_telemetry=False: keeps everything local AND silences the
+    # harmless "Failed to send telemetry event" warnings from chromadb.
+    from chromadb.config import Settings
+    client = chromadb.PersistentClient(
+        path=config.CHROMA_DIR,
+        settings=Settings(anonymized_telemetry=False))
 
     # Idempotency: drop and recreate — re-running is always safe.
     try:

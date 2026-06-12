@@ -31,7 +31,10 @@ def _get_collection():
     global _collection
     if _collection is None:
         import chromadb
-        client = chromadb.PersistentClient(path=config.CHROMA_DIR)
+        from chromadb.config import Settings
+        client = chromadb.PersistentClient(
+            path=config.CHROMA_DIR,
+            settings=Settings(anonymized_telemetry=False))
         _collection = client.get_or_create_collection(
             config.COLLECTION_NAME, metadata={"hnsw:space": "cosine"})
     return _collection
