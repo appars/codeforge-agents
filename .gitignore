@@ -1,0 +1,16 @@
+# Secrets — never commit!
+.env
+
+# Generated data
+chroma_db/
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
