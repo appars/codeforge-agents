@@ -1,0 +1,17 @@
+# Exposes CodeForge Agents inside the cluster (use Ingress or
+# `kubectl port-forward svc/codeforge-agents 8501:8501` to reach it).
+apiVersion: v1
+kind: Service
+metadata:
+  name: codeforge-agents
+  labels:
+    app: codeforge-agents
+    team: forge-platform
+spec:
+  selector:
+    app: codeforge-agents
+  ports:
+    - name: http
+      port: 8501
+      targetPort: 8501
+  type: ClusterIP

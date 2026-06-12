@@ -1,0 +1,66 @@
+# 🔨 CodeForge Agents — Kubernetes Deployment
+# -----------------------------------------------------------------
+# Create the secret FIRST (never put the key in a YAML file!):
+#
+#   kubectl create secret generic codeforge-secrets \
+#       --from-literal=GROQ_API_KEY='gsk_your_key_here'
+#
+# Then:
+#   kubectl apply -f k8s/deployment.yaml
+#   kubectl apply -f k8s/service.yaml
+#
+# META-TEACHING MOMENT: this manifest deliberately follows every rule
+# in knowledge/team_standards.md — paste it into CodeForge Agents
+# itself and ask "does this follow our team standards?" 🤯
+#   K8-1 team label ✓   K8-2 resources ✓   K8-3 pinned tag ✓
+#   K8-4 two replicas ✓ K8-5 secret from cluster, not inline ✓
+# -----------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: codeforge-agents
+  labels:
+    app: codeforge-agents
+    team: forge-platform          # K8-1
+spec:
+  replicas: 2                     # K8-4
+  selector:
+    matchLabels:
+      app: codeforge-agents
+  template:
+    metadata:
+      labels:
+        app: codeforge-agents
+        team: forge-platform
+    spec:
+      containers:
+        - name: codeforge-agents
+          image: codeforge-agents:4.3   # K8-3: pinned, never :latest
+          ports:
+            - containerPort: 8501
+          envFrom:
+            - secretRef:
+                name: codeforge-secrets   # K8-5: key injected by the cluster
+          resources:                       # K8-2
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          readinessProbe:
+            httpGet:
+              path: /_stcore/health
+              port: 8501
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /_stcore/health
+              port: 8501
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001          # matches the UID baked in the Dockerfile
+            allowPrivilegeEscalation: false

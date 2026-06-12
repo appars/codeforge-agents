@@ -97,6 +97,8 @@ code, pre, .cf-mono { font-family: 'IBM Plex Mono', monospace !important; }
     display: flex; align-items: center; gap: 0.5rem;
     font-size: 0.86rem; padding: 0.55rem 0.7rem; border-radius: 9px;
     border: 1px solid #2a2f39; background: #1C2027; line-height: 1.45;
+    color: #d6d9df;            /* explicit — readable on the dark badge
+                                   even when the page theme is light */
 }
 .cf-dot { font-size: 0.7rem; }
 .cf-badge.ok     { border-color: rgba(61,220,132,.4); }

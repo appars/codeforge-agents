@@ -41,7 +41,12 @@ codeforge-agents/
 ├── tools/              # python_runner / java_checker / yaml_validator
 ├── rag/                # chunking / ingest / retrieve
 ├── knowledge/          # 6 markdown knowledge files (see below)
-└── tests/              # 18 unit tests — run with no API key needed
+├── tests/              # 18 unit tests — run with no API key needed
+├── Dockerfile · .dockerignore
+├── k8s/                # Deployment + Service manifests (secret via kubectl)
+├── DEPLOYMENT.md       # Docker / Kubernetes / Streamlit Cloud guide
+├── DEMO_GUIDE.md       # 12 verified classroom demos in 5 acts
+└── Makefile · LICENSE · .github/workflows/ci.yml
 ```
 
 ---
@@ -156,6 +161,19 @@ python tests/test_all.py        # or: python -m pytest tests/ -v
 | `javac` skipped | install a JDK for Level-2 Java checking (static checks still run) |
 
 ---
+
+## Deployment
+
+See **DEPLOYMENT.md** for Docker, Kubernetes and Streamlit Community Cloud,
+including how secrets are injected per platform and why the knowledge index
+is baked into the Docker image at build time. Quick taste:
+
+```bash
+make docker-build && make docker-run
+```
+
+For public URLs, set the optional `APP_PASSWORD` secret to gate access and
+protect your Groq quota.
 
 ## Author
 

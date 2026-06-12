@@ -52,6 +52,24 @@ if "pending_prompt" not in st.session_state:
 if "context_window" not in st.session_state:
     st.session_state.context_window = config.DEFAULT_CONTEXT_WINDOW
 
+
+# ---------------------------------------------------------------- Gate
+# Optional access gate for public deployments (APP_PASSWORD secret).
+# TEACHING NOTE: a public LLM app without any gate lets strangers spend
+# your API quota — cost protection is part of deployment design.
+
+if config.APP_PASSWORD:
+    if not st.session_state.get("authed", False):
+        st.markdown("#### 🔐 This deployment is protected")
+        entered = st.text_input("Access passphrase", type="password")
+        if entered:
+            if entered == config.APP_PASSWORD:
+                st.session_state.authed = True
+                st.rerun()
+            else:
+                st.error("Wrong passphrase.")
+        st.stop()
+
 # ---------------------------------------------------------------- Sidebar
 
 with st.sidebar:
@@ -104,9 +122,16 @@ with st.sidebar:
         st.session_state.messages = []
         st.rerun()
 
+# ---------------------------------------------------------------- Input
+# (resolved early so the welcome cards hide the instant a prompt exists)
+
+typed = st.chat_input("💬 Paste code or ask a question…")
+prompt = typed or st.session_state.pending_prompt
+st.session_state.pending_prompt = None
+
 # ---------------------------------------------------------------- Welcome
 
-if not st.session_state.messages:
+if not st.session_state.messages and not prompt:
     st.markdown("#### Click a scenario to watch the agents work")
     cols = st.columns(3)
     for i, sc in enumerate(SCENARIOS):
@@ -126,11 +151,6 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# ---------------------------------------------------------------- Input
-
-typed = st.chat_input("💬 Paste code or ask a question…")
-prompt = typed or st.session_state.pending_prompt
-st.session_state.pending_prompt = None
 
 # ---------------------------------------------------------------- Pipeline
 

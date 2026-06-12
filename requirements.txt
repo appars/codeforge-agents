@@ -5,4 +5,9 @@ python-dotenv>=1.0.0
 pyyaml>=6.0
 chromadb>=0.5.0
 posthog<6.0
+# Align the OpenTelemetry stack chromadb pulls in — without this pin,
+# resolvers can pick an ancient otlp exporter (1.11) whose generated
+# protobuf code breaks on modern protobuf ("Descriptors cannot be
+# created directly"). Seen on Streamlit Cloud, June 2026.
+opentelemetry-exporter-otlp-proto-grpc>=1.36.0
 sentence-transformers>=3.0.0

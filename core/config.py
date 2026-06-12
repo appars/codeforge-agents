@@ -25,13 +25,35 @@ load_dotenv(PROJECT_ROOT / ".env")
 # ---------------------------------------------------------------- App
 APP_NAME = "CodeForge Agents"
 APP_ICON = "🔨"
-APP_VERSION = "4.0"
+APP_VERSION = "4.3"
 APP_TAGLINE = "Watch AI agents debug, review and optimize your code — live."
 
 # ---------------------------------------------------------------- LLM
 # Provider preference: "auto" tries Groq first, then Ollama, then tools-only.
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "auto")          # auto | groq | ollama
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+
+
+def _secret(name: str, default: str = "") -> str:
+    """Read a secret from (1) environment / .env, then (2) Streamlit
+    Cloud's secrets manager. Order matters: env vars are how Docker and
+    Kubernetes inject secrets; st.secrets is how Streamlit Cloud does it.
+    The app code never knows which platform supplied the value."""
+    value = os.getenv(name, "")
+    if value:
+        return value
+    try:
+        import streamlit as st
+        return st.secrets.get(name, default)   # Streamlit Cloud
+    except Exception:
+        return default
+
+
+GROQ_API_KEY = _secret("GROQ_API_KEY")
+
+# Optional gate for PUBLIC deployments: if set, visitors must enter this
+# passphrase before using the app. Protects your Groq quota when the URL
+# is public (e.g. Streamlit Cloud). Leave empty for open access.
+APP_PASSWORD = _secret("APP_PASSWORD")
 
 # Two-model strategy (a professional pattern):
 #   * small + fast model for classification (the Router)
