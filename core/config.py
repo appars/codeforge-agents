@@ -37,13 +37,23 @@ def _secret(name: str, default: str = "") -> str:
     """Read a secret from (1) environment / .env, then (2) Streamlit
     Cloud's secrets manager. Order matters: env vars are how Docker and
     Kubernetes inject secrets; st.secrets is how Streamlit Cloud does it.
-    The app code never knows which platform supplied the value."""
+
+    IMPORTANT: we only touch st.secrets if a secrets.toml actually
+    exists. Merely ACCESSING st.secrets without one makes Streamlit
+    render a 'No secrets found' error in the app — which also counts as
+    the script's first Streamlit command and breaks set_page_config()."""
     value = os.getenv(name, "")
     if value:
         return value
+    secrets_files = (
+        PROJECT_ROOT / ".streamlit" / "secrets.toml",
+        Path.home() / ".streamlit" / "secrets.toml",
+    )
+    if not any(p.exists() for p in secrets_files):
+        return default
     try:
         import streamlit as st
-        return st.secrets.get(name, default)   # Streamlit Cloud
+        return st.secrets.get(name, default)   # Streamlit Cloud / local toml
     except Exception:
         return default
 
