@@ -37,8 +37,11 @@ ui.hero()
 
 @st.cache_resource(show_spinner="Checking LLM backends…")
 def get_llm():
+    # status = the first live backend (for the sidebar badge).
+    # client = the full fallback chain (Groq → Ollama), tried per call.
     status = get_status()
-    return LLMClient(status) if status.ok else None, status
+    client = LLMClient()
+    return (client if client.available() else None), status
 
 
 llm, status = get_llm()
@@ -242,6 +245,14 @@ if prompt and prompt.strip():
 
                 st.markdown("**✅ Final Answer**")
                 final = st.write_stream(Synthesizer(llm).stream(ctx))
+                # Honest failover indicator: tell the student which backend
+                # actually answered, and flag when the chain fell back.
+                if llm.last_provider == "ollama" and llm.last_fellback:
+                    st.caption("⚠️ Groq was unavailable (rate limit or error) "
+                               "— this answer came from your local Ollama "
+                               "model. The fallback chain did its job.")
+                elif llm.last_provider:
+                    st.caption(f"Answered by: {llm.last_provider}")
             except LLMUnavailableError as e:
                 final = (f"{e}\n\n**The deterministic tool still worked:**\n"
                          f"```\n{tool['output']}\n```")

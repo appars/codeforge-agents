@@ -24,8 +24,9 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     ANONYMIZED_TELEMETRY=False \
-    # cache the embedding model INSIDE the image (downloaded once at build)
-    SENTENCE_TRANSFORMERS_HOME=/app/.model-cache
+    # ONNX embedding model caches here; baked into the image at build time
+    # (see `python -m rag.ingest` below) so containers start offline-ready
+    XDG_CACHE_HOME=/app/.cache
 
 # Dependency layer first — Docker caches it, so code changes don't
 # trigger a full reinstall (a classic Dockerfile optimization lesson)

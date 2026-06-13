@@ -10,4 +10,5 @@ posthog<6.0
 # protobuf code breaks on modern protobuf ("Descriptors cannot be
 # created directly"). Seen on Streamlit Cloud, June 2026.
 opentelemetry-exporter-otlp-proto-grpc>=1.36.0
-sentence-transformers>=3.0.0
+# ONNX embeddings (lightweight; replaces torch-heavy sentence-transformers)
+onnxruntime>=1.17.0

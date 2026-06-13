@@ -15,17 +15,7 @@ Query-time RAG with three professional habits the old v3 lacked:
 
 from core import config
 
-_model = None
 _collection = None
-
-
-def _get_model():
-    global _model
-    if _model is None:
-        from sentence_transformers import SentenceTransformer
-        _model = SentenceTransformer(config.EMBEDDING_MODEL)
-    return _model
-
 
 def _get_collection():
     global _collection
@@ -44,7 +34,7 @@ def reset_cache():
     """Forget cached Chroma handles. MUST be called after a rebuild:
     ingest deletes + recreates the collection, so any cached handle
     points at a dead collection and count() reports stale results."""
-    global _model, _collection
+    global _collection
     _collection = None
 
 
@@ -66,12 +56,17 @@ def retrieve(query: str, language: str = "general") -> dict:
         }
     """
     empty = {"context": "", "hits": []}
+    from rag.embedder import embed, EmbeddingsUnavailable
     try:
         collection = _get_collection()
         if collection.count() == 0:
             return {**empty, "note": "Knowledge base is empty — it will be "
                     "auto-built on the next app load."}
-        embedding = _get_model().encode(query).tolist()
+        embedding = embed([query])[0]
+    except EmbeddingsUnavailable as e:
+        return {**empty, "note": "RAG disabled — the embedding model could "
+                f"not load ({e}). The app continues without retrieval; "
+                "better no context than wrong context."}
     except Exception as e:
         return {**empty, "note": f"Retrieval unavailable: {e}"}
 

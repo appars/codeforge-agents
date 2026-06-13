@@ -69,7 +69,7 @@ APP_PASSWORD = _secret("APP_PASSWORD")
 #   * small + fast model for classification (the Router)
 #   * large reasoning model for the agent pipeline
 ROUTER_MODEL = os.getenv("ROUTER_MODEL", "llama-3.1-8b-instant")
-AGENT_MODEL = os.getenv("AGENT_MODEL", "openai/gpt-oss-120b")
+AGENT_MODEL = os.getenv("AGENT_MODEL", "llama-3.3-70b-versatile")
 
 # Local fallback (Ollama)
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
@@ -84,7 +84,9 @@ PYTHON_EXEC_TIMEOUT = int(os.getenv("PYTHON_EXEC_TIMEOUT", "5"))  # seconds
 KNOWLEDGE_DIR = PROJECT_ROOT / "knowledge"
 CHROMA_DIR = str(PROJECT_ROOT / "chroma_db")
 COLLECTION_NAME = "codeforge_knowledge"
-EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+# Embeddings use ChromaDB's bundled ONNX build of all-MiniLM-L6-v2
+# (onnxruntime, no PyTorch) — see rag/embedder.py for why.
+EMBEDDING_MODEL = "all-MiniLM-L6-v2 (ONNX)"
 RAG_TOP_K = 3
 # Similarity threshold (cosine similarity, 0..1). Below this we retrieve
 # NOTHING — better no context than wrong context ("context pollution").

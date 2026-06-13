@@ -26,11 +26,6 @@ _FILE_META = {
 }
 
 
-def _embedder():
-    from sentence_transformers import SentenceTransformer
-    return SentenceTransformer(config.EMBEDDING_MODEL)
-
-
 def build_index(progress=print) -> dict:
     """(Re)build the entire index. Returns a summary dict."""
     import chromadb
@@ -40,13 +35,14 @@ def build_index(progress=print) -> dict:
         return {"ok": False,
                 "message": f"No .md files found in {config.KNOWLEDGE_DIR}"}
 
+    from rag.embedder import embed, EmbeddingsUnavailable
     try:
-        model = _embedder()
-    except Exception as e:
+        from rag.embedder import get_embedder
+        get_embedder()                       # warm + verify the ONNX model
+    except EmbeddingsUnavailable as e:
         return {"ok": False,
-                "message": "Could not load the embedding model "
-                           f"({config.EMBEDDING_MODEL}). First run needs "
-                           f"internet to download it once. Error: {e}"}
+                "message": "Could not load the ONNX embedding model. The "
+                           f"first run downloads it once (needs internet). {e}"}
 
     # anonymized_telemetry=False: keeps everything local AND silences the
     # harmless "Failed to send telemetry event" warnings from chromadb.
@@ -71,7 +67,7 @@ def build_index(progress=print) -> dict:
         if not chunks:
             continue
         texts = [c["text"] for c in chunks]
-        embeddings = model.encode(texts, show_progress_bar=False).tolist()
+        embeddings = embed(texts)
         collection.add(
             ids=[c["id"] for c in chunks],
             documents=texts,
