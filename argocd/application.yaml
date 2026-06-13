@@ -1,0 +1,38 @@
+# 🔨 CodeForge Agents — ArgoCD Application (GitOps)
+# -----------------------------------------------------------------
+# Registers the repo with ArgoCD so Kubernetes state is driven by Git.
+# ArgoCD watches the k8s/ folder on the main branch and keeps the
+# cluster in sync — auto-sync + self-heal + prune.
+#
+#   kubectl apply -f argocd/application.yaml
+#
+# Then edit k8s/deployment.yaml in GitHub (e.g. replicas: 2 -> 3),
+# commit, and watch ArgoCD roll it out with no kubectl. Try
+# `kubectl scale deploy codeforge-agents --replicas=1` and watch
+# self-heal revert it. That is GitOps.
+# -----------------------------------------------------------------
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: codeforge-agents
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/appars/codeforge-agents
+    targetRevision: main
+    path: k8s
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+
+  syncPolicy:
+    automated:
+      prune: true          # delete resources removed from Git
+      selfHeal: true       # revert manual cluster changes
+    syncOptions:
+      - CreateNamespace=true

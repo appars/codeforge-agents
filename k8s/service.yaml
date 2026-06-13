@@ -1,5 +1,6 @@
-# Exposes CodeForge Agents inside the cluster (use Ingress or
-# `kubectl port-forward svc/codeforge-agents 8501:8501` to reach it).
+# Exposes CodeForge Agents. NodePort makes it reachable at
+# localhost:30851 on Rancher Desktop / a local cluster — handy for a
+# classroom demo. (Switch to ClusterIP + Ingress for a real cluster.)
 apiVersion: v1
 kind: Service
 metadata:
@@ -14,4 +15,5 @@ spec:
     - name: http
       port: 8501
       targetPort: 8501
-  type: ClusterIP
+      nodePort: 30851
+  type: NodePort

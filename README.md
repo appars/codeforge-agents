@@ -1,188 +1,273 @@
 # 🔨 CodeForge Agents
 
-**Watch AI agents debug, review and optimize your code — live.**
+**Watch AI agents debug, review and optimize your code — live, with the hood open.**
 
-CodeForge Agents is a teaching-first **multi-agent AI engineering assistant** for **Python, Java and Kubernetes YAML**. Every step of the agent pipeline — routing, knowledge retrieval, tool execution, review, optimization, synthesis — is visible in the UI, so students see *how* agentic AI works, not just *that* it works.
+Built for the CMRIT FDP *"Agentic AI: Developing Intelligent Agents with Modern AI Frameworks."*
 
-Built with **Streamlit + Groq (or local Ollama) + ChromaDB**.
+Paste code or ask a question → a **Router** classifies it → **RAG** retrieves from a local knowledge base → a deterministic **Tool** runs (Python sandbox, YAML/K8s validator, Java checker) → **Reviewer**, **Optimizer** and **Synthesizer** agents reason over the result — every step visible in the UI.
 
----
-
-## Architecture
-
-```text
-User Prompt
-    ↓
-🧭 Router            small fast LLM classifies language + intent
-    ↓                (keyword fallback works with no LLM at all)
-📚 RAG Retrieval     ChromaDB · per-section chunks · metadata filter
-    ↓                · relevance threshold · scores shown in UI
-⚙️ Deterministic Tool python: safe subprocess exec · java: static
-    ↓                checks + optional javac · yaml: K8s validation
-🔍 Reviewer Agent    grounded by the tool result (the ground truth)
-    ↓
-⚡ Optimizer Agent   honest: says "no optimization needed" when true
-    ↓
-✅ Final Synthesizer streams the merged answer token by token
-```
-
-The folder structure mirrors this diagram — each module is a lecture:
-
-```text
-codeforge-agents/
-├── app.py              # Streamlit UI only — no business logic
-├── core/
-│   ├── config.py       # ALL settings in one place; secrets from .env
-│   ├── llm.py          # provider abstraction: Groq ⇄ Ollama ⇄ offline
-│   ├── router.py       # LLM classifier + keyword fallback
-│   ├── memory.py       # sliding-window conversation memory
-│   └── scenarios.py    # the six clickable demo scenarios
-├── agents/             # base class + Reviewer / Optimizer / Synthesizer
-├── tools/              # python_runner / java_checker / yaml_validator
-├── rag/                # chunking / ingest / retrieve
-├── knowledge/          # 6 markdown knowledge files (see below)
-├── tests/              # 18 unit tests — run with no API key needed
-├── Dockerfile · .dockerignore
-├── k8s/                # Deployment + Service manifests (secret via kubectl)
-├── DEPLOYMENT.md       # Docker / Kubernetes / Streamlit Cloud guide
-├── DEMO_GUIDE.md       # 12 verified classroom demos in 5 acts
-└── Makefile · LICENSE · .github/workflows/ci.yml
-```
+> Works **with or without** a cloud key. The LLM uses a **fallback chain**: 🟢 Groq → 🟡 local Ollama → 🔴 Tools-Only Mode. As long as one backend is reachable, the app answers — and it never crashes when none are.
 
 ---
 
-## Quick Start
+## 🏗️ Architecture
+
+```
+             ┌──────────────────────────────────────────────┐
+             │                Streamlit UI                  │
+             │  Router │ RAG │ Tool │ Reviewer │ Optimizer  │
+             │                  │ Synthesizer               │
+             └──────┬───────────────────────────┬───────────┘
+                    │                           │
+         ┌──────────▼──────────┐     ┌──────────▼──────────┐
+         │   RAG + Tools        │     │   LLM Fallback Chain │
+         │  ChromaDB (ONNX      │◄────┤  Groq  → Ollama →    │
+         │  MiniLM embeddings)  │ctx  │  Tools-Only          │
+         │  python/yaml/java    │     │  llama-3.3-70b /     │
+         │  deterministic tools │     │  local mistral       │
+         └──────────┬──────────┘     └──────────┬──────────┘
+                    │                           │ (cloud, optional)
+             ┌──────▼───────┐            ┌──────▼───────┐
+             │ knowledge/   │            │   Groq API   │
+             │ *.md  index  │            └──────────────┘
+             └──────────────┘
+
+Git push ──► GitHub repo ──► ArgoCD (auto-sync) ──► Kubernetes
+                                  ▲                    │
+                                  └── self-heal ◄──────┘
+docker build ──► Docker Hub (appars/codeforge-agents)
+```
+
+**The agentic part:** each request flows through a pipeline of specialised agents. The Reviewer judges correctness against the deterministic tool result (it never guesses whether code ran), the Optimizer proposes safe improvements, and the Synthesizer merges everything — tool output, retrieved knowledge, both agents' notes — into one streamed answer. The full trace is expandable in the UI.
+
+---
+
+## 🚀 Local Development
 
 ```bash
-# 1. Clone and enter
-git clone <your-repo-url> && cd codeforge-agents
+git clone https://github.com/appars/codeforge-agents
+cd codeforge-agents
 
-# 2. Virtual environment
-python -m venv venv
-source venv/bin/activate          # Windows: venv\Scripts\activate
-
-# 3. Install
+python3.11 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-# 4. Configure (free Groq key from https://console.groq.com/keys)
-cp .env.example .env
-#    → edit .env and paste: GROQ_API_KEY=gsk_...
-
-# 5. Build the knowledge index (first run downloads a small embedding model)
+# Build the knowledge index ONCE (no API key needed — embeddings are local).
+# Commit the resulting chroma_db/ so cloud deploys start instantly.
 python -m rag.ingest
 
-# 6. Launch
 streamlit run app.py
+# → http://localhost:8501
 ```
 
-**No API key? No problem.** The app boots into **Tools-Only Mode**: code execution, YAML validation, Java checks and knowledge retrieval all work without any LLM, with a banner explaining how to connect one. With **Ollama** installed locally (`ollama pull mistral`, `ollama serve`) the app falls back to it automatically.
+Click a **Demo Scenario** card to watch the full pipeline run on a planted bug.
 
----
-
-## The LLM strategy (a lesson in itself)
-
-| Job | Model | Why |
-|---|---|---|
-| Router (classification) | `llama-3.1-8b-instant` | tiny task → tiny, fast, cheap model |
-| Agents (reasoning) | `openai/gpt-oss-120b` | review/optimization need real reasoning |
-| Local fallback | `mistral` via Ollama | zero-cost, fully offline |
-
-Change any of these in `.env` — agent code never changes. That is the point of `core/llm.py`.
-
----
-
-## Knowledge base & RAG
-
-Six markdown files in `knowledge/`, chunked **per `##` section** with metadata (`language`, `topic`, `source`):
-
-- `python_debug.md`, `python_optimization.md`, `java_debug.md`, `yaml_k8s_debug.md`, `k8s_best_practices.md` — real *error → cause → fix* references
-- **`team_standards.md`** — fictional internal engineering rules. This is the RAG showpiece: no LLM can know these from training, so when a student asks *"does this code follow our team standards?"*, the correct answer can ONLY come from retrieval. **Instructors:** replace these rules with your own course's grading standards and re-run `python -m rag.ingest` to make the lesson personal.
-
-Retrieval applies a **relevance threshold** — if nothing scores high enough, it retrieves *nothing* (watch the RAG expander say so), avoiding context pollution. The Router's language decision **filters** retrieval by metadata.
-
----
-
-## Classroom demo script (the six buttons)
-
-| # | Scenario | Pipeline path it demonstrates |
-|---|---|---|
-| 1 | 🐍 Debug broken Python | tool catches SyntaxError *before* any LLM reasoning |
-| 2 | ☸️ Fix a Kubernetes YAML | structure validation finds the missing `metadata.name` |
-| 3 | ☕ Review a Java class | static checks: missing `;`, `==` vs `.equals()` |
-| 4 | 📚 Team standards check | **RAG**: answerable only via `team_standards.md` |
-| 5 | ⚡ Optimize a nested loop | Optimizer turns O(n²) into a set/dict O(n) |
-| 6 | 📖 Explain code | router picks `explain` → no tool fires (correct restraint) |
-
-Six clicks = a complete tour of the architecture.
-
----
-
-## Module → lecture mapping
-
-| Module | Teaching topic |
-|---|---|
-| `core/llm.py` | provider abstraction, graceful degradation, friendly errors |
-| `core/router.py` | LLM-as-classifier vs heuristics (before/after demo) |
-| `tools/python_runner.py` | tool guardrails: subprocess, timeout, why not `exec()` |
-| `tools/java_checker.py` | capability honesty: degrade through levels, never pretend |
-| `rag/chunking.py` + `ingest.py` | chunking strategy, metadata, idempotent indexing |
-| `rag/retrieve.py` | relevance thresholds, context pollution, filtered search |
-| `agents/base.py` | the agent abstraction: persona + context → output |
-| `agents/synthesizer.py` | grounding, synthesis, streaming UX |
-| `tests/test_all.py` | what is testable in an agentic system (and what isn't) |
-
----
-
-## Tests
+### Run tests
 
 ```bash
-python tests/test_all.py        # or: python -m pytest tests/ -v
+pip install pytest
+pytest -q
 ```
 
-18 tests covering all three tools, the router fallback, extraction and chunking — **no API key or internet needed**, by design.
-
 ---
 
-## Honest security note (read this with your students)
+## 🔑 LLM Configuration (the fallback chain)
 
-`subprocess` + isolated mode + timeout makes Python execution far safer than the naive `exec()` it replaces — infinite loops are killed, the app process is protected. **It is still not a true sandbox**: the child process runs with your OS permissions. Production systems use containers, gVisor or Firecracker microVMs. Knowing exactly where the residual risk lives is part of the lesson.
+The app tries backends **in order** on every request, so a rate limit or a missing key degrades gracefully instead of failing:
 
----
+| Mode        | Indicator | When it runs                          | Features                                              |
+| ----------- | --------- | ------------------------------------- | ----------------------------------------------------- |
+| Groq        | 🟢         | `GROQ_API_KEY` set and under quota    | Full pipeline on `llama-3.3-70b-versatile` (fast)     |
+| Ollama      | 🟡         | Groq unavailable, local Ollama up     | Full pipeline on a local model (offline, no key)      |
+| Tools-Only  | 🔴         | No LLM reachable                      | Sandbox + YAML/Java validation + RAG, no agents       |
 
-## Troubleshooting
+Get a free Groq key at <https://console.groq.com/keys>. Resolution order:
 
-| Symptom | Fix |
-|---|---|
-| 🔴 "No LLM available" | add `GROQ_API_KEY` to `.env`, or start Ollama — app still works in Tools-Only Mode meanwhile |
-| 401 invalid key | re-copy the key from console.groq.com/keys into `.env` |
-| 429 rate limit | each student should create their **own** free key rather than sharing |
-| "Knowledge base is empty" | run `python -m rag.ingest` or just reload the app (it auto-builds) |
-| Model not found (404) | model deprecated — update `AGENT_MODEL` in `.env` (see console.groq.com/docs/models) |
-| `javac` skipped | install a JDK for Level-2 Java checking (static checks still run) |
+1. `.env` file → `cp .env.example .env`, set `GROQ_API_KEY=gsk_...`
+2. Environment variable → `export GROQ_API_KEY=gsk_...`
+3. Streamlit Cloud → **Settings → Secrets** (see below)
+4. Nothing → 🟡 Ollama if running, else 🔴 Tools-Only
 
----
-
-## Deployment
-
-See **DEPLOYMENT.md** for Docker, Kubernetes and Streamlit Community Cloud,
-including how secrets are injected per platform and why the knowledge index
-is baked into the Docker image at build time. Quick taste:
+For the best **local** experience, install [Ollama](https://ollama.com) and pull a coder model:
 
 ```bash
-make docker-build && make docker-run
+ollama pull qwen2.5-coder      # strong at debugging; set OLLAMA_MODEL=qwen2.5-coder
+ollama serve
 ```
 
-For public URLs, set the optional `APP_PASSWORD` secret to gate access and
-protect your Groq quota.
-
-## Author
-
-**Apparsamy Perumal**
-Professor of Practice | AI | DevOps | Cloud | Agentic AI Research
-GitHub: https://github.com/appars
-
-Part of the **Forge** teaching series, alongside InsightForge.
+Switch the chain order any time with `LLM_PROVIDER` (`auto` | `groq` | `ollama`) in `.env`.
 
 ---
 
-*"From code assistant to engineering co-pilot — with the hood open."*
+## 🐳 Docker
+
+```bash
+# Build (the image bakes the knowledge index at build time — no key needed)
+docker build -t appars/codeforge-agents:latest .
+
+# Run (Tools-Only Mode — no key)
+docker run -p 8501:8501 appars/codeforge-agents:latest
+
+# Run (Groq Mode)
+docker run -p 8501:8501 -e GROQ_API_KEY=gsk_xxx appars/codeforge-agents:latest
+
+# Push to Docker Hub
+docker login
+docker push appars/codeforge-agents:latest
+```
+
+Image highlights: `python:3.11-slim`, non-root user (UID 10001), layer-cached deps, ONNX embeddings (no PyTorch), built-in `HEALTHCHECK` on Streamlit's `/_stcore/health`.
+
+---
+
+## ☁️ Deploy to Streamlit Cloud
+
+Streamlit Cloud runs on a small (~1 GB) container and **does not use the Dockerfile**, so it cannot build the index at boot without running out of memory. The fix is to **commit a pre-built index**:
+
+```bash
+python -m rag.ingest          # builds chroma_db/ with the real ONNX model
+git add chroma_db .gitignore
+git commit -m "Commit pre-built knowledge index for cloud boot"
+git push
+```
+
+Then on share.streamlit.io:
+
+1. New app → point at `appars/codeforge-agents`, branch `main`, `app.py`.
+2. **Settings → Secrets** → add (TOML format):
+   ```toml
+   GROQ_API_KEY = "gsk_your_key_here"
+   ```
+3. Deploy. The app boots instantly (index already present) and answers via Groq.
+
+> Ollama isn't reachable from Streamlit Cloud, so the chain there is effectively Groq → Tools-Only. Keep `GROQ_API_KEY` valid.
+
+---
+
+## 🖥️ Rancher Desktop Setup
+
+1. Install [Rancher Desktop](https://rancherdesktop.io/) → enable **Kubernetes**.
+2. Verify: `kubectl get nodes` shows the node `Ready`.
+3. NodePort services are reachable at `localhost:<nodePort>`.
+
+---
+
+## ☸️ Kubernetes Deployment (manual)
+
+```bash
+# Create the Groq secret FIRST (never put the key in a YAML file).
+# Skip this to run in Tools-Only / Ollama mode.
+kubectl create secret generic codeforge-secrets \
+    --from-literal=GROQ_API_KEY='gsk_xxx'
+
+kubectl apply -f k8s/
+kubectl get pods -l app=codeforge-agents      # 2 replicas Running
+
+# Access (NodePort)
+open http://localhost:30851
+# or: kubectl port-forward svc/codeforge-agents 8501:8501
+```
+
+Manifests follow the project's own `knowledge/team_standards.md` rules: team label, resource requests/limits, pinned image tag, two replicas, secret injected from the cluster (never inline), non-root securityContext, readiness + liveness probes on `/_stcore/health`.
+
+---
+
+## 🔁 GitOps with ArgoCD
+
+```bash
+# Install ArgoCD
+kubectl create namespace argocd
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+
+# UI access
+kubectl port-forward svc/argocd-server -n argocd 8080:443
+# initial admin password:
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+
+# Register the app
+kubectl apply -f argocd/application.yaml
+```
+
+ArgoCD now watches `github.com/appars/codeforge-agents` (path `k8s/`, branch `main`) with **auto-sync + self-heal + prune**.
+
+**Live demo moment 🎬:** edit `k8s/deployment.yaml` in GitHub (`replicas: 2 → 3`), commit, and watch ArgoCD detect, sync, and roll out — no `kubectl`. Then `kubectl scale deploy codeforge-agents --replicas=1` and watch self-heal revert it. That's GitOps.
+
+---
+
+## 🧪 Health Check
+
+```bash
+curl -fsS http://localhost:8501/_stcore/health   # → "ok"
+```
+
+Used by the Docker `HEALTHCHECK` and both Kubernetes probes.
+
+---
+
+## 🛠️ Troubleshooting
+
+| Symptom                            | Fix                                                                                       |
+| ---------------------------------- | ----------------------------------------------------------------------------------------- |
+| Streamlit Cloud `connection refused` at boot | Commit a pre-built index: `python -m rag.ingest` then push `chroma_db/`         |
+| 🔴 Tools-Only despite a key         | Check `GROQ_API_KEY` (env / `.env` / Secrets); on cloud it must be TOML in **Secrets**    |
+| 🟡 Ollama mode locally              | Expected when Groq is rate-limited (429) — the chain fell back; or start `ollama serve`   |
+| `ImagePullBackOff`                 | Image not pushed / wrong name → `docker push appars/codeforge-agents:latest`              |
+| Pod `OOMKilled`                    | Raise the memory limit in `k8s/deployment.yaml` (default 1Gi)                             |
+| Probes failing                     | Check `kubectl logs`; Streamlit needs ~10–20 s to boot                                    |
+| ArgoCD `Unknown`/`ComparisonError` | Repo URL/branch/path wrong, or repo is private (add repo credentials in ArgoCD)           |
+| NodePort unreachable               | `kubectl port-forward svc/codeforge-agents 8501:8501`                                      |
+| First answer slow                  | Ollama loads the model into RAM on first call; later calls are fast                       |
+
+---
+
+## 📸 Screenshots
+
+|                                                                 |                                                              |
+| --------------------------------------------------------------- | ------------------------------------------------------------ |
+| ![Pipeline](assets/screenshot-pipeline.png)                     | ![Agent trace](assets/screenshot-agents.png)                 |
+
+*(placeholders — add after first run)*
+
+---
+
+## 📁 Project Structure
+
+```
+codeforge-agents/
+├── app.py                     # Streamlit UI (pipeline, sidebar, modes)
+├── core/
+│   ├── config.py              # Central config, secret resolution
+│   ├── llm.py                 # LLM fallback chain (Groq → Ollama → none)
+│   ├── router.py              # LLM + keyword intent/language classifier
+│   ├── memory.py              # Conversation memory window
+│   ├── scenarios.py           # Demo scenario cards
+│   └── ui.py                  # Design system (the "forge" theme)
+├── agents/
+│   ├── base.py                # Shared agent contract
+│   ├── reviewer.py            # Correctness / risk review
+│   ├── optimizer.py           # Safe improvement suggestions
+│   └── synthesizer.py         # Streams the final answer
+├── tools/
+│   ├── python_runner.py       # Sandboxed subprocess execution
+│   ├── yaml_validator.py      # YAML + Kubernetes structure checks
+│   ├── java_checker.py        # Java heuristics
+│   └── extract.py             # Fenced code-block extraction
+├── rag/
+│   ├── embedder.py            # ONNX MiniLM embeddings (no torch)
+│   ├── chunking.py            # Per-section markdown chunking
+│   ├── ingest.py              # Build the ChromaDB index
+│   └── retrieve.py            # Hybrid retrieval + relevance threshold
+├── knowledge/                 # *.md knowledge base (debug/optimize/standards)
+├── chroma_db/                 # Pre-built index (committed for cloud boot)
+├── tests/                     # Unit + fallback tests
+├── k8s/                       # deployment + service (NodePort)
+├── argocd/application.yaml    # GitOps app (auto-sync, self-heal, prune)
+├── Dockerfile                 # python:3.11-slim, non-root, healthcheck
+├── requirements.txt
+└── .env.example
+```
+
+---
+
+## 📜 License
+
+MIT — built for teaching. Reuse freely in your FDP sessions.

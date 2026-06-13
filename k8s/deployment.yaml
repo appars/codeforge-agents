@@ -35,7 +35,7 @@ spec:
     spec:
       containers:
         - name: codeforge-agents
-          image: codeforge-agents:4.3   # K8-3: pinned, never :latest
+          image: appars/codeforge-agents:4.3   # K8-3: pinned, never :latest
           ports:
             - containerPort: 8501
           envFrom:
