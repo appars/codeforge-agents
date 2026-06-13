@@ -95,24 +95,33 @@ with st.sidebar:
             get_llm.clear()
             st.rerun()
 
-    # Knowledge base — self-healing: builds itself when missing.
-    # (On Streamlit Cloud the disk is ephemeral, so after a restart the
-    # index is gone; the app simply rebuilds on first load. No buttons.)
+    # Knowledge base.
+    # On a committed index (recommended for Streamlit Cloud), index_ready()
+    # is true immediately and we do NOTHING expensive at boot — no model
+    # download, no embedding. That avoids the out-of-memory crash that kills
+    # boot on small cloud containers.
+    # If no index exists, we try to build it, but wrapped so that even an
+    # OOM-prone build can't take the whole app down: on failure the app
+    # continues in Tools-Only + LLM mode.
     st.markdown("### 📚 Knowledge Base")
     if rag.index_ready():
         st.caption("✅ Index ready")
     elif not st.session_state.get("kb_build_failed"):
-        with st.spinner("First-time setup: building knowledge index…"):
-            from rag.ingest import build_index
-            result = build_index(progress=lambda m: None)
+        try:
+            with st.spinner("First-time setup: building knowledge index…"):
+                from rag.ingest import build_index
+                result = build_index(progress=lambda m: None)
+        except Exception as exc:        # never let a build crash the app
+            result = {"ok": False, "message": f"Index build error: {exc}"}
         if result["ok"]:
             rag.reset_cache()      # drop stale Chroma handles (see retrieve.py)
             st.rerun()
         else:
             st.session_state.kb_build_failed = True
-            st.error(result["message"])
-            st.caption("Fix the issue and refresh, or run "
-                       "`python -m rag.ingest` manually.")
+            st.caption("⚠️ Running without RAG — the app still works "
+                       "(tools + LLM). To enable retrieval, commit a "
+                       "pre-built index: run `python -m rag.ingest` locally "
+                       "and push the `chroma_db/` folder.")
     else:
         st.caption("⚠️ Knowledge index unavailable — app continues "
                    "without RAG. Refresh to retry.")

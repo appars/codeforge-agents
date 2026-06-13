@@ -2,7 +2,12 @@
 .env
 
 # Generated data
-chroma_db/
+# NOTE: chroma_db/ is intentionally NOT ignored. We commit a pre-built
+# index so Streamlit Cloud (which can't build at boot without running out
+# of memory) starts instantly with RAG ready. Rebuild it with
+# `python -m rag.ingest` whenever you change the knowledge/ files.
+# (If you prefer not to commit it, re-add `chroma_db/` here — the app
+# still boots, just without RAG until an index exists.)
 
 # Python
 __pycache__/
