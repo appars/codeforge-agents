@@ -1,0 +1,9 @@
+Acme code review checklist — read before opening or approving any pull request.
+
+Every pull request needs at least one approving review from a senior engineer before it can merge. Pull requests larger than 400 changed lines should be split into smaller ones unless there is a documented reason not to.
+
+Tests are mandatory for any bug fix. The pull request must add a test that fails before the fix and passes after it. Reviewers should reject a bug-fix pull request that ships without a regression test.
+
+Secrets, API keys, and passwords must never appear in code, config, or commit history. If a secret is ever committed, rotate it immediately — deleting the line or force-pushing is not a fix.
+
+Public APIs need documentation and a changelog entry. Any breaking change requires a version bump and a short migration note for downstream teams.
