@@ -52,3 +52,66 @@ def chunk_markdown(text: str, source: str) -> list[dict]:
             current.append(line)
     flush()
     return chunks
+
+
+# ---------------------------------------------------------------------------
+# Plain-text support (for uploaded notes / standards that aren't markdown)
+# ---------------------------------------------------------------------------
+
+def chunk_plain(text: str, source: str,
+                target: int = 600, hard_max: int = 1200) -> list[dict]:
+    """Chunk a file that has NO `## ` headings.
+
+    A plain .txt run through chunk_markdown() collapses into ONE giant
+    chunk (one fuzzy vector averaging every topic — the v3 mistake). So
+    instead we:
+      * split on blank lines into paragraphs,
+      * group consecutive paragraphs up to ~`target` chars (avoids tiny,
+        contextless chunks),
+      * hard-split any single block longer than `hard_max` (handles a file
+        that is one unbroken line with no blank lines).
+    """
+    paras = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
+
+    blocks: list[str] = []
+    for p in paras:
+        while len(p) > hard_max:          # one giant line / paragraph
+            blocks.append(p[:hard_max])
+            p = p[hard_max:]
+        if p:
+            blocks.append(p)
+
+    chunks: list[dict] = []
+
+    def add(body: str):
+        body = body.strip()
+        if body:
+            n = len(chunks)
+            chunks.append({
+                "id": f"{source}::p{n}",
+                "text": body,
+                "section": f"part {n + 1}",
+            })
+
+    buf = ""
+    for b in blocks:
+        if buf and len(buf) + len(b) + 2 > target:
+            add(buf)
+            buf = b
+        else:
+            buf = f"{buf}\n\n{b}" if buf else b
+    add(buf)
+    return chunks
+
+
+def chunk_document(text: str, source: str) -> list[dict]:
+    """Pick a chunking strategy by content, not by file extension.
+
+    Markdown with `## ` headings -> section chunks (chunk_markdown).
+    Anything else (plain notes, a pasted blob) -> paragraph chunks
+    (chunk_plain). Uploaded files route through here; the baked index
+    keeps calling chunk_markdown directly.
+    """
+    if any(line.startswith("## ") for line in text.split("\n")):
+        return chunk_markdown(text, source)
+    return chunk_plain(text, source)

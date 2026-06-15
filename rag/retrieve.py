@@ -46,20 +46,25 @@ def index_ready() -> bool:
         return False
 
 
-def retrieve(query: str, language: str = "general") -> dict:
+def retrieve(query: str, language: str = "general",
+             user_collection=None) -> dict:
     """
     Returns:
         {
           "context":  str,   # text to inject into agent prompts ('' if none)
-          "hits":     list,  # [{source, section, score, preview}] for the UI
+          "hits":     list,  # [{source, section, score, origin, preview}]
           "note":     str,   # human-readable status for the RAG expander
         }
+
+    `user_collection` is an OPTIONAL per-session ephemeral collection of
+    the user's own uploaded knowledge (see rag/user_kb.py). When present,
+    its chunks compete with the baked index on similarity alone.
     """
     empty = {"context": "", "hits": []}
     from rag.embedder import embed, EmbeddingsUnavailable
     try:
-        collection = _get_collection()
-        if collection.count() == 0:
+        base = _get_collection()
+        if base.count() == 0 and user_collection is None:
             return {**empty, "note": "Knowledge base is empty — it will be "
                     "auto-built on the next app load."}
         embedding = embed([query])[0]
@@ -70,28 +75,55 @@ def retrieve(query: str, language: str = "general") -> dict:
     except Exception as e:
         return {**empty, "note": f"Retrieval unavailable: {e}"}
 
-    # Router-driven filter: language-specific chunks + general ones
+    # Router-driven filter applies to the BAKED index only: language-specific
+    # chunks + general ones. The user's own uploads are queried WITHOUT a
+    # language filter — if they bothered to add it, they want it considered.
     where = None
     if language in ("python", "java", "yaml"):
         where = {"language": {"$in": [language, "general"]}}
 
-    res = collection.query(query_embeddings=[embedding],
-                           n_results=config.RAG_TOP_K, where=where)
+    # Gather candidates from BOTH collections into ONE scored list, then
+    # apply a single relevance bar + top-k. Source never beats relevance
+    # (pure-rank merge — the honest RAG behavior).
+    #
+    # MERGE-POLICY SWITCH: to instead GUARANTEE an uploaded chunk shows
+    # whenever it clears the threshold (handy for a nervous live demo),
+    # after sorting `candidates`, pop the best origin=="user" entry and
+    # prepend it before the top-k trim below. Three lines, no other change.
+    candidates = []
 
-    docs = res["documents"][0]
-    metas = res["metadatas"][0]
-    dists = res["distances"][0]          # cosine distance: 0 = identical
+    def collect(coll, use_filter):
+        try:
+            if coll is None or coll.count() == 0:
+                return
+            res = coll.query(
+                query_embeddings=[embedding],
+                n_results=min(config.RAG_TOP_K, coll.count()),
+                where=where if use_filter else None)
+            for doc, meta, dist in zip(res["documents"][0],
+                                       res["metadatas"][0],
+                                       res["distances"][0]):
+                candidates.append((1.0 - dist, doc, meta))   # cosine: 0=identical
+        except Exception:
+            return
+
+    collect(base, use_filter=True)
+    collect(user_collection, use_filter=False)
+
+    candidates.sort(key=lambda c: c[0], reverse=True)
 
     hits, kept = [], []
-    for doc, meta, dist in zip(docs, metas, dists):
-        similarity = 1.0 - dist
+    for similarity, doc, meta in candidates:
         if similarity < config.RAG_MIN_SIMILARITY:
             continue                      # the threshold doing its job
+        if len(kept) >= config.RAG_TOP_K:
+            break
         kept.append(doc)
         hits.append({
             "source": meta.get("source", "?"),
             "section": meta.get("section", "?"),
             "score": round(similarity, 3),
+            "origin": meta.get("origin", "base"),
             "preview": doc[:220] + ("…" if len(doc) > 220 else ""),
         })
 
@@ -102,9 +134,8 @@ def retrieve(query: str, language: str = "general") -> dict:
                         "Retrieving nothing is the CORRECT behavior here — "
                         "irrelevant context would only pollute the prompt."}
 
-    return {
-        "context": "\n\n---\n\n".join(kept),
-        "hits": hits,
-        "note": f"Retrieved {len(kept)} relevant chunk(s) "
-                f"(language filter: {language}).",
-    }
+    n_user = sum(1 for h in hits if h["origin"] == "user")
+    note = (f"Retrieved {len(kept)} relevant chunk(s) "
+            f"(language filter: {language}")
+    note += f"; {n_user} from your upload)." if n_user else ")."
+    return {"context": "\n\n---\n\n".join(kept), "hits": hits, "note": note}

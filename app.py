@@ -21,6 +21,7 @@ from agents.optimizer import Optimizer
 from agents.synthesizer import Synthesizer
 from tools import python_runner, java_checker, yaml_validator
 from rag import retrieve as rag
+from rag import user_kb
 
 # ---------------------------------------------------------------- Page
 
@@ -36,15 +37,16 @@ ui.hero()
 
 
 @st.cache_resource(show_spinner="Checking LLM backends…")
-def get_llm():
+def get_llm(groq_key: str):
+    # Cached on groq_key so typing a new key in the UI rebuilds the client.
     # status = the first live backend (for the sidebar badge).
     # client = the full fallback chain (Groq → Ollama), tried per call.
-    status = get_status()
-    client = LLMClient()
+    status = get_status(groq_key or None)
+    client = LLMClient(api_key=groq_key or None)
     return (client if client.available() else None), status
 
 
-llm, status = get_llm()
+llm, status = get_llm(st.session_state.get("groq_key", config.GROQ_API_KEY))
 
 # ---------------------------------------------------------------- State
 
@@ -82,15 +84,21 @@ with st.sidebar:
     ui.status_badge(status)
 
     if status.provider == "none":
-        with st.expander("🔑 How to connect an LLM", expanded=True):
+        with st.expander("🔑 Connect an LLM", expanded=True):
             st.markdown(
-                "**Option A — Groq (recommended, free):**\n"
-                "1. Get a key at [console.groq.com/keys](https://console.groq.com/keys)\n"
-                "2. Copy `.env.example` to `.env`\n"
-                "3. Paste the key: `GROQ_API_KEY=gsk_...`\n"
-                "4. Restart the app\n\n"
-                "**Option B — Ollama (local):** install Ollama, then\n"
-                "`ollama pull mistral` and `ollama serve`.")
+                "**Paste a Groq key** (free at "
+                "[console.groq.com/keys](https://console.groq.com/keys)) — "
+                "it stays in this session only, never logged or saved:")
+            entered = st.text_input("Groq API key", type="password",
+                                    label_visibility="collapsed",
+                                    placeholder="gsk_…")
+            if entered and entered != st.session_state.get("groq_key"):
+                st.session_state.groq_key = entered
+                get_llm.clear()        # rebuild the client with the new key
+                st.rerun()
+            st.markdown(
+                "Or set `GROQ_API_KEY` in `.env` / a k8s Secret, **or** run "
+                "**Ollama** locally (`ollama pull mistral` + `ollama serve`).")
         if st.button("🔄 Re-check connection"):
             get_llm.clear()
             st.rerun()
@@ -125,6 +133,37 @@ with st.sidebar:
     else:
         st.caption("⚠️ Knowledge index unavailable — app continues "
                    "without RAG. Refresh to retry.")
+
+    # Bring your own knowledge (session-scoped — see rag/user_kb.py).
+    # Lives only in this session: isolated per user, written to no disk,
+    # gone when the tab closes. add_text() dedups by content hash, so the
+    # file_uploader re-handing the same files on every rerun is harmless.
+    st.markdown("### 📄 Your knowledge")
+    st.caption("Add your team's standards or notes — the agents will cite "
+               "them. This stays in your session only.")
+    uploads = st.file_uploader(
+        "Upload text files", type=["txt", "md"],
+        accept_multiple_files=True, key="kb_upload",
+        label_visibility="collapsed")
+    for f in uploads or []:
+        res = user_kb.add_text(f.name, f.getvalue())
+        if not res.get("ok"):
+            st.warning(res["message"])
+
+    pasted = st.text_area("Or paste text", key="kb_paste", height=80,
+                          placeholder="Paste coding standards or notes…")
+    if st.button("➕ Add pasted text", disabled=not pasted.strip(),
+                 use_container_width=True):
+        with st.spinner("Indexing…"):
+            res = user_kb.add_text("pasted notes", pasted)
+        (st.success if res.get("ok") else st.warning)(res["message"])
+
+    for d in user_kb.docs():
+        st.caption(f"📄 {d['name']} · {d['chunks']} chunk(s)")
+    if user_kb.docs() and st.button("🗑️ Clear my knowledge",
+                                    use_container_width=True):
+        user_kb.clear()
+        st.rerun()
 
     st.session_state.context_window = st.slider(
         "🧠 Memory window (messages)", 2, 12,
@@ -197,12 +236,15 @@ if prompt and prompt.strip():
 
         # ---- 2. RAG ------------------------------------------------------
         with st.spinner("📚 Retrieving knowledge…"):
-            retrieval = rag.retrieve(prompt, route["language"])
+            retrieval = rag.retrieve(prompt, route["language"],
+                                     user_collection=user_kb.collection_or_none())
         with st.expander(f"📚 RAG — {len(retrieval['hits'])} chunk(s) "
                          "retrieved", expanded=False):
             st.caption(retrieval["note"])
             for hit in retrieval["hits"]:
-                st.markdown(f"**{hit['source']}** › *{hit['section']}* "
+                badge = ("📄 your upload" if hit.get("origin") == "user"
+                         else "📚 base")
+                st.markdown(f"`{badge}` **{hit['source']}** › *{hit['section']}* "
                             f"— similarity `{hit['score']}`")
                 st.code(hit["preview"], language=None)
 

@@ -52,12 +52,13 @@ def _short(exc: Exception, limit: int = 120) -> str:
     return text[:limit] + ("…" if len(text) > limit else "")
 
 
-def _check_groq() -> LLMStatus:
-    if not config.GROQ_API_KEY:
+def _check_groq(api_key: str | None = None) -> LLMStatus:
+    key = api_key or config.GROQ_API_KEY
+    if not key:
         return LLMStatus("none", False, "No GROQ_API_KEY found")
     try:
         from groq import Groq
-        client = Groq(api_key=config.GROQ_API_KEY, timeout=10)
+        client = Groq(api_key=key, timeout=10)
         client.models.list()  # cheap authenticated ping
         return LLMStatus("groq", True, f"Groq connected · {config.AGENT_MODEL}")
     except Exception as exc:
@@ -84,10 +85,11 @@ def _ordered_providers() -> list[str]:
     return ["groq", "ollama"]            # "auto": Groq first, Ollama fallback
 
 
-def get_status() -> LLMStatus:
+def get_status(api_key: str | None = None) -> LLMStatus:
     """Health check for the sidebar: reports the FIRST live backend in the
-    chain (the one a request would hit first), or 'none'."""
-    checks = {"groq": _check_groq, "ollama": _check_ollama}
+    chain (the one a request would hit first), or 'none'. An explicit
+    api_key (e.g. one typed into the UI) overrides config.GROQ_API_KEY."""
+    checks = {"groq": lambda: _check_groq(api_key), "ollama": _check_ollama}
     first_error = None
     for name in _ordered_providers():
         status = checks[name]()
@@ -111,11 +113,14 @@ class LLMClient:
     underlying SDK client the first time that provider is used.
     """
 
-    def __init__(self, providers: list[str] | None = None):
+    def __init__(self, providers: list[str] | None = None,
+                 api_key: str | None = None):
+        # An explicit key (typed into the UI) overrides config.GROQ_API_KEY.
+        self.api_key = api_key or config.GROQ_API_KEY
         # Which backends are even possible (Groq needs a key).
         possible = providers if providers is not None else _ordered_providers()
         self.providers = [p for p in possible
-                          if p != "groq" or config.GROQ_API_KEY]
+                          if p != "groq" or self.api_key]
         self._clients: dict[str, object] = {}
         self.last_provider: str | None = None      # who answered last call
         self.last_fellback: bool = False           # did we fall through?
@@ -135,7 +140,7 @@ class LLMClient:
             if name == "groq":
                 from groq import Groq
                 self._clients[name] = Groq(
-                    api_key=config.GROQ_API_KEY, timeout=config.REQUEST_TIMEOUT)
+                    api_key=self.api_key, timeout=config.REQUEST_TIMEOUT)
             elif name == "ollama":
                 import ollama
                 self._clients[name] = ollama.Client(host=config.OLLAMA_HOST)

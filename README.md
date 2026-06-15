@@ -7,6 +7,16 @@ Built for the CMRIT FDP *"Agentic AI: Developing Intelligent Agents with Modern 
 Paste code or ask a question → a **Router** classifies it → **RAG** retrieves from a local knowledge base → a deterministic **Tool** runs (Python sandbox, YAML/K8s validator, Java checker) → **Reviewer**, **Optimizer** and **Synthesizer** agents reason over the result — every step visible in the UI.
 
 > Works **with or without** a cloud key. The LLM uses a **fallback chain**: 🟢 Groq → 🟡 local Ollama → 🔴 Tools-Only Mode. As long as one backend is reachable, the app answers — and it never crashes when none are.
+>
+> No key on the command line required — **paste a Groq key right in the sidebar** (it stays in your session, never logged), or supply it via `.env` / a Kubernetes Secret.
+
+---
+
+## 🆕 Recent improvements
+
+- **📄 Bring your own knowledge** — upload a `.txt`/`.md` file or paste text in the sidebar and the agents cite *your* standards/notes alongside the built-in knowledge base. Per session, in-memory, nothing written to disk. ([details](#-bring-your-own-knowledge-per-session))
+- **🔑 API key from the UI** — connect Groq by pasting the key in the app, not just on the command line. The `.env` / Secret path still takes precedence, so Docker and k8s are unchanged.
+- **🐳 Faster container start** — the ONNX embedding model and Chroma index are now baked into the image **as the runtime user**, so containers no longer re-download the 79 MB model on every start. Fully offline-ready.
 
 ---
 
@@ -85,7 +95,10 @@ Get a free Groq key at <https://console.groq.com/keys>. Resolution order:
 1. `.env` file → `cp .env.example .env`, set `GROQ_API_KEY=gsk_...`
 2. Environment variable → `export GROQ_API_KEY=gsk_...`
 3. Streamlit Cloud → **Settings → Secrets** (see below)
-4. Nothing → 🟡 Ollama if running, else 🔴 Tools-Only
+4. **App sidebar** → paste the key into the 🔑 *Connect an LLM* field — stored in that browser session only, never logged or saved (handy when an attendee brings their own key)
+5. Nothing → 🟡 Ollama if running, else 🔴 Tools-Only
+
+A key from sources 1–3 takes precedence, so the sidebar field only appears when no key is configured.
 
 For the best **local** experience, install [Ollama](https://ollama.com) and pull a coder model:
 
@@ -98,24 +111,39 @@ Switch the chain order any time with `LLM_PROVIDER` (`auto` | `groq` | `ollama`)
 
 ---
 
+## 📄 Bring your own knowledge (per session)
+
+Beyond the built-in `knowledge/*.md` base, anyone can add their **own** material at runtime from the sidebar — a team style guide, a grading rubric, lab guidelines — and watch the agents cite it.
+
+- **Upload** a `.txt` or `.md` file (or several), **or paste** text directly — no file or markdown needed.
+- It is chunked and embedded with the **same** model as the baked index, so retrieval ranks your chunks against the built-in ones by relevance. Hits are badged 📄 *your upload* vs 📚 *base* in the RAG trace.
+- Stored **in-memory, per browser session** (`chromadb.EphemeralClient`): isolated between users, written to no disk, and gone when the tab closes. Nothing leaks across sessions or, in multi-replica Kubernetes, across pods.
+- Safeguards: tolerant decoding (Word/Windows files), 1 MB per file, ~200 chunks per session, content-hash dedup, and a **Clear my knowledge** button.
+
+> Plain text is chunked by paragraph; markdown with `## ` headings is chunked by section. The built-in knowledge base is untouched — uploads live only in your session.
+
+---
+
 ## 🐳 Docker
 
 ```bash
-# Build (the image bakes the knowledge index at build time — no key needed)
+# Build (the image bakes the knowledge index AND the ONNX model at build
+# time, as the non-root runtime user — no key needed, no download at start)
 docker build -t appars/codeforge-agents:latest .
 
-# Run (Tools-Only Mode — no key)
+# Run (Tools-Only Mode — no key; or paste a Groq key in the sidebar)
 docker run -p 8501:8501 appars/codeforge-agents:latest
 
-# Run (Groq Mode)
-docker run -p 8501:8501 -e GROQ_API_KEY=gsk_xxx appars/codeforge-agents:latest
+# Run (Groq Mode) — prefer --env-file over -e: a key passed with -e is
+# visible in shell history and in `docker inspect`
+docker run -p 8501:8501 --env-file .env appars/codeforge-agents:latest
 
 # Push to Docker Hub
 docker login
 docker push appars/codeforge-agents:latest
 ```
 
-Image highlights: `python:3.11-slim`, non-root user (UID 10001), layer-cached deps, ONNX embeddings (no PyTorch), built-in `HEALTHCHECK` on Streamlit's `/_stcore/health`.
+Image highlights: `python:3.11-slim`, non-root user (UID 10001), layer-cached deps, ONNX embeddings (no PyTorch), built-in `HEALTHCHECK` on Streamlit's `/_stcore/health`. The index and embedding model are baked **as UID 10001**, so the container reads them from the same home it runs as — no 79 MB download on startup, works on an airgapped network.
 
 ---
 
@@ -216,6 +244,7 @@ Used by the Docker `HEALTHCHECK` and both Kubernetes probes.
 | ArgoCD `Unknown`/`ComparisonError` | Repo URL/branch/path wrong, or repo is private (add repo credentials in ArgoCD)           |
 | NodePort unreachable               | `kubectl port-forward svc/codeforge-agents 8501:8501`                                      |
 | First answer slow                  | Ollama loads the model into RAM on first call; later calls are fast                       |
+| Container re-downloads 79 MB at start | Old image baked the model as root but ran as `forge`. Rebuild with the current Dockerfile (bakes as UID 10001). |
 
 ---
 
@@ -253,9 +282,10 @@ codeforge-agents/
 │   └── extract.py             # Fenced code-block extraction
 ├── rag/
 │   ├── embedder.py            # ONNX MiniLM embeddings (no torch)
-│   ├── chunking.py            # Per-section markdown chunking
+│   ├── chunking.py            # Markdown (per-section) + plain-text chunking
 │   ├── ingest.py              # Build the ChromaDB index
-│   └── retrieve.py            # Hybrid retrieval + relevance threshold
+│   ├── retrieve.py            # Retrieval + relevance threshold + session-KB merge
+│   └── user_kb.py             # Session-scoped "bring your own knowledge" store
 ├── knowledge/                 # *.md knowledge base (debug/optimize/standards)
 ├── chroma_db/                 # Pre-built index (committed for cloud boot)
 ├── tests/                     # Unit + fallback tests
