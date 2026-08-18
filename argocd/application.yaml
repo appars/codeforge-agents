@@ -16,8 +16,6 @@ kind: Application
 metadata:
   name: codeforge-agents
   namespace: argocd
-  finalizers:
-    - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
 
