@@ -69,7 +69,7 @@ APP_PASSWORD = _secret("APP_PASSWORD")
 #   * small + fast model for classification (the Router)
 #   * large reasoning model for the agent pipeline
 ROUTER_MODEL = os.getenv("ROUTER_MODEL", "llama-3.1-8b-instant")
-AGENT_MODEL = os.getenv("AGENT_MODEL", "llama-3.3-70b-versatile")
+AGENT_MODEL = os.getenv("AGENT_MODEL", "openai/gpt-oss-120b")
 
 # Local fallback (Ollama)
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
