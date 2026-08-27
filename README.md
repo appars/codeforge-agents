@@ -2,7 +2,7 @@
 
 **Watch AI agents debug, review and optimize your code — live, with the hood open.**
 
-Built for the CMRIT FDP *"Agentic AI: Developing Intelligent Agents with Modern AI Frameworks."*
+Built for the CMRIT FDP *"Agentic AI: Development of Intelligent Agents with Modern AI Frameworks."*
 
 Paste code or ask a question → a **Router** classifies it → **RAG** retrieves from a local knowledge base → a deterministic **Tool** runs (Python sandbox, YAML/K8s validator, Java checker) → **Reviewer**, **Optimizer** and **Synthesizer** agents reason over the result — every step visible in the UI.
 
