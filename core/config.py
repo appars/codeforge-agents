@@ -68,7 +68,8 @@ APP_PASSWORD = _secret("APP_PASSWORD")
 # Two-model strategy (a professional pattern):
 #   * small + fast model for classification (the Router)
 #   * large reasoning model for the agent pipeline
-ROUTER_MODEL = os.getenv("ROUTER_MODEL", "llama-3.1-8b-instant")
+# ROUTER_MODEL = os.getenv("ROUTER_MODEL", "llama-3.1-8b-instant")
+ROUTER_MODEL = os.getenv("ROUTER_MODEL", "openai/gpt-oss-20b")
 AGENT_MODEL = os.getenv("AGENT_MODEL", "openai/gpt-oss-120b")
 
 # Local fallback (Ollama)

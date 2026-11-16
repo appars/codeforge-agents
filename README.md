@@ -33,7 +33,7 @@ Paste code or ask a question → a **Router** classifies it → **RAG** retrieve
          │   RAG + Tools        │     │   LLM Fallback Chain │
          │  ChromaDB (ONNX      │◄────┤  Groq  → Ollama →    │
          │  MiniLM embeddings)  │ctx  │  Tools-Only          │
-         │  python/yaml/java    │     │  llama-3.3-70b /     │
+         │  python/yaml/java    │     │  gpt-oss-120b /      │
          │  deterministic tools │     │  local mistral       │
          └──────────┬──────────┘     └──────────┬──────────┘
                     │                           │ (cloud, optional)
@@ -86,7 +86,7 @@ The app tries backends **in order** on every request, so a rate limit or a missi
 
 | Mode        | Indicator | When it runs                          | Features                                              |
 | ----------- | --------- | ------------------------------------- | ----------------------------------------------------- |
-| Groq        | 🟢         | `GROQ_API_KEY` set and under quota    | Full pipeline on `llama-3.3-70b-versatile` (fast)     |
+| Groq        | 🟢         | `GROQ_API_KEY` set and under quota    | Full pipeline on `openai/gpt-oss-120b` (fast)     |
 | Ollama      | 🟡         | Groq unavailable, local Ollama up     | Full pipeline on a local model (offline, no key)      |
 | Tools-Only  | 🔴         | No LLM reachable                      | Sandbox + YAML/Java validation + RAG, no agents       |
 

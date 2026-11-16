@@ -47,7 +47,7 @@ def classify(prompt: str, llm: LLMClient | None) -> dict:
             raw = llm.chat(
                 [{"role": "user",
                   "content": _CLASSIFY_PROMPT.format(prompt=prompt[:4000])}],
-                model=config.ROUTER_MODEL, temperature=0.0, max_tokens=100)
+                model=config.ROUTER_MODEL, temperature=0.0, max_tokens=400)
             data = json.loads(_extract_json(raw))
             lang = data.get("language", "general").lower()
             intent = data.get("intent", "general").lower()
